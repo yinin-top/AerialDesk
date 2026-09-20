@@ -1,6 +1,27 @@
 import AppKit
 import AVFoundation
 
+/// Backing-layer host for one AVPlayerLayer.
+/// The player layer must be handed to AppKit via `makeBackingLayer()` — flipping
+/// `wantsLayer` first and then assigning `.layer` leaves AppKit's own backing layer
+/// in a broken ownership state that over-releases on window teardown (SIGSEGV in
+/// objc_release during the post-close FrontBoard lifecycle callout).
+final class PlayerHostView: NSView {
+    private let playerLayer: AVPlayerLayer
+
+    init(frame: NSRect, playerLayer: AVPlayerLayer) {
+        self.playerLayer = playerLayer
+        super.init(frame: frame)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func makeBackingLayer() -> CALayer { playerLayer }
+
+    override var wantsUpdateLayer: Bool { true }
+}
+
 /// Places looping, muted, click-through video windows between the desktop
 /// wallpaper and desktop icons, across every selected display.
 /// All of this used to be a separate player process in the prototype; as a
@@ -75,6 +96,10 @@ final class WallpaperEngine {
             window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
             window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
             window.ignoresMouseEvents = true   // clicks fall through to the desktop
+            // Programmatic windows are owned by our `windows` array; the default
+            // isReleasedWhenClosed=true makes close() release out from under ARC
+            // (double-release on teardown → SIGSEGV in objc_release).
+            window.isReleasedWhenClosed = false
             window.isOpaque = true
             window.backgroundColor = .black
             window.hasShadow = false
@@ -92,9 +117,7 @@ final class WallpaperEngine {
             playerLayer.videoGravity = .resizeAspectFill
             playerLayer.frame = NSRect(origin: .zero, size: screen.frame.size)
 
-            let host = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
-            host.wantsLayer = true
-            host.layer = playerLayer
+            let host = PlayerHostView(frame: NSRect(origin: .zero, size: screen.frame.size), playerLayer: playerLayer)
             window.contentView = host
             window.orderFrontRegardless()
             player.play()
