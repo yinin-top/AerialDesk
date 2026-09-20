@@ -1,0 +1,26 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # git describe needs tags
+      - name: Build universal app
+        run: ./build.sh
+      - name: Zip
+        run: |
+          cd dist
+          ditto -c -k --keepParent AerialDesk.app "AerialDesk-${{ github.ref_name }}.zip"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/AerialDesk-*.zip
+          generate_release_notes: true
