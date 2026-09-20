@@ -1,23 +1,26 @@
 #!/bin/bash
 # Build AerialDesk.app into dist/
 #   ./build.sh               native-arch build (fast, incremental)
-#   ./build.sh --universal   arm64+x86_64 universal build (clean cache; used by CI)
+#   ./build.sh --universal   arm64+x86_64 universal build (used by CI releases)
 set -euo pipefail
 cd "$(dirname "$0")"
-
-# Pin the Xcode toolchain: the CLT toolchain chokes on .build state produced here
-export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 
 VERSION=$(git describe --tags --always 2>/dev/null || echo "1.0.0")
 
 BIN=""
 if [ "${1:-}" = "--universal" ]; then
-  # xcbuild state doesn't survive switches between native and cross builds — start clean
-  rm -rf .build
-  if swift build -c release --arch arm64 --arch x86_64; then
-    # universal product lands in .build/out (xcbuild) or .build/apple (SwiftPM native)
-    BIN=$(ls .build/out/Products/Release/AerialDesk .build/apple/Products/Release/AerialDesk 2>/dev/null | head -1 || true)
-  fi
+  # Build each arch into its own scratch dir, then lipo-merge. Deterministic across
+  # SwiftPM versions (the --arch pair shortcut behaves differently on some toolchains).
+  swift build -c release --triple arm64-apple-macosx --scratch-path .build/arm64
+  swift build -c release --triple x86_64-apple-macosx --scratch-path .build/x86_64
+  ARM=$(find .build/arm64 -type f -name AerialDesk | head -1)
+  X86=$(find .build/x86_64 -type f -name AerialDesk | head -1)
+  [ -n "$ARM" ] && [ -n "$X86" ] || { echo "universal build: missing arch binaries" >&2; exit 1; }
+  mkdir -p dist
+  lipo -create "$ARM" "$X86" -output dist/AerialDesk-universal
+  # Fail loudly rather than silently shipping a single-arch binary
+  lipo -info dist/AerialDesk-universal | grep -q x86_64 && lipo -info dist/AerialDesk-universal | grep -q arm64
+  BIN=dist/AerialDesk-universal
 fi
 if [ -z "$BIN" ]; then
   swift build -c release
@@ -50,3 +53,4 @@ EOF
 
 codesign --force -s - "$APP"
 echo "Built: $APP ($VERSION)"
+lipo -info "$APP/Contents/MacOS/AerialDesk"

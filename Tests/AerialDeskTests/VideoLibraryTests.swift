@@ -55,11 +55,19 @@ private func touch(_ path: String, daysAgo: Double) {
     #expect(VideoLibrary.resolveVideo("", available: []) == nil)
 }
 
-@Test func availableVideosIncludesSystemVideosOnlyWhenUserDirsAbsent() {
-    // temp home has no aerial caches → only system-bundled videos remain
+@Test func availableVideosUsesSystemDirWhenUserDirsAbsent() throws {
+    // temp home has no aerial caches; system dir injected so the test
+    // doesn't depend on the machine actually shipping system wallpapers
     let home = makeTempDir("home")
-    defer { try? FileManager.default.removeItem(atPath: home) }
-    let videos = VideoLibrary.availableVideos(home: home)
-    #expect(!videos.isEmpty)
-    #expect(videos.allSatisfy { $0.path.hasPrefix(VideoLibrary.systemVideosDir()) })
+    let sysDir = makeTempDir("system")
+    defer {
+        try? FileManager.default.removeItem(atPath: home)
+        try? FileManager.default.removeItem(atPath: sysDir)
+    }
+    touch(sysDir + "/Golden Gate.mov", daysAgo: 90)
+
+    let videos = VideoLibrary.availableVideos(home: home, systemDir: sysDir)
+    #expect(videos.count == 1)
+    #expect(videos[0].path == sysDir + "/Golden Gate.mov")
+    #expect(videos[0].name == "Golden Gate (System)")
 }

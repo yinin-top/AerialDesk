@@ -26,7 +26,8 @@ enum VideoLibrary {
     }
 
     /// All playable videos: user's aerials (newest first) followed by system-bundled ones.
-    static func availableVideos(home: String = NSHomeDirectory()) -> [VideoOption] {
+    static func availableVideos(home: String = NSHomeDirectory(),
+                                systemDir: String = systemVideosDir()) -> [VideoOption] {
         let df = DateFormatter()
         df.dateStyle = .medium
         df.timeStyle = .none
@@ -38,7 +39,7 @@ enum VideoLibrary {
                 options.append(VideoOption(name: "Aerial · " + df.string(from: mtime), path: url.path))
             }
         }
-        for (url, _) in scanVideos(dir: systemVideosDir(), recursive: false) {
+        for (url, _) in scanVideos(dir: systemDir, recursive: false) {
             let base = url.deletingPathExtension().lastPathComponent
             options.append(VideoOption(name: base + " (System)", path: url.path))
         }

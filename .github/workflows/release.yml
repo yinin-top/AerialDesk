@@ -14,7 +14,7 @@ jobs:
         with:
           fetch-depth: 0   # git describe needs tags
       - name: Build universal app
-        run: ./build.sh
+        run: ./build.sh --universal
       - name: Zip
         run: |
           cd dist
