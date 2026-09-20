@@ -5,6 +5,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Pin the Xcode toolchain: the CLT toolchain's xcbuild session fails to init here
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+
 VERSION=$(git describe --tags --always 2>/dev/null || echo "1.0.0")
 
 BIN=""
@@ -23,7 +26,7 @@ if [ "${1:-}" = "--universal" ]; then
   BIN=dist/AerialDesk-universal
 fi
 if [ -z "$BIN" ]; then
-  swift build -c release
+  swift build -c release || { rm -rf .build; swift build -c release; }   # self-heal poisoned .build state
   BIN=.build/release/AerialDesk
 fi
 
